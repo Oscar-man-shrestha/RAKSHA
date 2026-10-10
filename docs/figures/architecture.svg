@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="420" viewBox="0 0 1100 420" role="img" aria-labelledby="title desc">
+  <title id="title">RAKSHA architecture</title>
+  <desc id="desc">Power feeds the ESP32 node. Sense, estimate, and decide run on the node. Act drives the worker alarms. Record stores the shift. Serve publishes the dashboard.</desc>
+  <rect width="1100" height="420" fill="#0b0e13"/>
+  <g font-family="ui-monospace, Menlo, Consolas, monospace" fill="#e2e8f0">
+    <text x="36" y="36" font-size="13" letter-spacing="2" fill="#94a3b8">RAKSHA  ·  ONE BENCH</text>
+    <g>
+      <rect x="36" y="64" width="150" height="72" rx="6" fill="#151a23" stroke="#344053"/>
+      <text x="111" y="94" text-anchor="middle" font-size="13">12 V</text>
+      <text x="111" y="114" text-anchor="middle" font-size="11" fill="#94a3b8">HW-411 ’ 5.0 V</text>
+    </g>
+    <g>
+      <rect x="230" y="56" width="250" height="300" rx="8" fill="#10141c" stroke="#f59e0b"/>
+      <text x="355" y="82" text-anchor="middle" font-size="13" fill="#fbbf24">ESP32 NODE</text>
+      <text x="250" y="118" font-size="13">SENSE</text>
+      <text x="250" y="136" font-size="11" fill="#94a3b8">10 ms IMU · 2 s climate</text>
+      <text x="250" y="168" font-size="13">ESTIMATE</text>
+      <text x="250" y="186" font-size="11" fill="#94a3b8">heat index · risk · presence</text>
+      <text x="250" y="218" font-size="13">DECIDE</text>
+      <text x="250" y="236" font-size="11" fill="#94a3b8">shift · band · fall · fault</text>
+      <text x="250" y="268" font-size="13">RECORD</text>
+      <text x="250" y="286" font-size="11" fill="#94a3b8">CSV every 15 s and on edges</text>
+      <text x="250" y="318" font-size="13">SERVE</text>
+      <text x="250" y="336" font-size="11" fill="#94a3b8">AP 192.168.4.1 · PIN commands</text>
+    </g>
+    <g>
+      <rect x="540" y="64" width="230" height="88" rx="6" fill="#151a23" stroke="#344053"/>
+      <text x="655" y="96" text-anchor="middle" font-size="13">WORKER</text>
+      <text x="655" y="118" text-anchor="middle" font-size="11" fill="#94a3b8">OLED · RGB · vibration</text>
+      <text x="655" y="136" text-anchor="middle" font-size="11" fill="#94a3b8">fan relay · beacon relay</text>
+    </g>
+    <g>
+      <rect x="540" y="176" width="230" height="72" rx="6" fill="#151a23" stroke="#344053"/>
+      <text x="655" y="206" text-anchor="middle" font-size="13">SHIFT FILE</text>
+      <text x="655" y="226" text-anchor="middle" font-size="11" fill="#94a3b8">LittleFS /shift.csv</text>
+    </g>
+    <g>
+      <rect x="820" y="64" width="244" height="184" rx="6" fill="#151a23" stroke="#34d399"/>
+      <text x="942" y="96" text-anchor="middle" font-size="13" fill="#34d399">DASHBOARD</text>
+      <text x="942" y="122" text-anchor="middle" font-size="11" fill="#94a3b8">exposure clock</text>
+      <text x="942" y="142" text-anchor="middle" font-size="11" fill="#94a3b8">heat capillary</text>
+      <text x="942" y="162" text-anchor="middle" font-size="11" fill="#94a3b8">process risk · fall gates</text>
+      <text x="942" y="182" text-anchor="middle" font-size="11" fill="#94a3b8">PIN counter</text>
+      <text x="942" y="210" text-anchor="middle" font-size="11" fill="#64748b">phone on the RAKSHA network</text>
+    </g>
+    <g>
+      <rect x="540" y="276" width="524" height="80" rx="6" fill="#151a23" stroke="#344053"/>
+      <text x="802" y="308" text-anchor="middle" font-size="13">BENCH SENSORS</text>
+      <text x="802" y="330" text-anchor="middle" font-size="11" fill="#94a3b8">DHT22 · NTC · MPU6050 · PIR · IR · KY-037 · pot · RC522 · barometer</text>
+    </g>
+    <path d="M186 100 H230" stroke="#f59e0b" stroke-width="2" fill="none"/>
+    <path d="M480 108 H540" stroke="#94a3b8" stroke-width="2" fill="none"/>
+    <path d="M770 156 H820" stroke="#34d399" stroke-width="2" fill="none"/>
+    <path d="M355 356 V276 H540" stroke="#64748b" stroke-width="2" fill="none"/>
+  </g>
+</svg>

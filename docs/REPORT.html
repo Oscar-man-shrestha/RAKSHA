@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RAKSHA — Project Report</title>
+<style>
+  @page { size: A4; margin: 14mm 14mm 16mm 14mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1c2430; font-size: 10.5pt; line-height: 1.45; }
+  h1 { font-size: 22pt; margin: 0 0 4px; }
+  h2 { font-size: 13pt; margin: 18px 0 6px; color: #14324f; border-bottom: 1.5px solid #14324f; padding-bottom: 2px; page-break-after: avoid; }
+  h3 { font-size: 11pt; margin: 12px 0 4px; color: #14324f; page-break-after: avoid; }
+  p { margin: 0 0 7px; }
+  ul, ol { margin: 4px 0 8px; padding-left: 18px; }
+  li { margin: 0 0 3px; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; page-break-inside: avoid; }
+  th, td { border: 1px solid #c9d2dc; padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: #14324f; color: white; font-size: 9pt; }
+  tr:nth-child(even) td { background: #f4f7fa; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9pt; }
+  figure { margin: 8px 0 12px; page-break-inside: avoid; }
+  img { width: 100%; height: auto; border: 1px solid #c9d2dc; }
+  figcaption { font-size: 9pt; color: #445; margin-top: 4px; }
+  .cover { background: #14324f; color: white; margin: -14mm -14mm 14px; padding: 22px 18px 18px; }
+  .cover p { margin: 0; }
+  .kicker { letter-spacing: 0.12em; text-transform: uppercase; font-size: 9pt; opacity: 0.8; }
+  pre { background: #f4f7fa; border: 1px solid #c9d2dc; padding: 8px; font-size: 8.5pt; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="cover">
+  <p class="kicker">SDG 8 · Decent Work and Economic Growth · Problem 8-A</p>
+  <h1>RAKSHA</h1>
+  <p>Heat and air-safety monitor for informal workers.</p>
+  <p>A bench node for kilns, tailoring units, welding shops, and small construction sites.</p>
+</div>
+
+<h2>1. Problem statement</h2>
+<p>Informal and small-workshop workers spend full shifts in heat, dust, and fumes. There is no instrument on the bench, so a dangerous hour is noticed only after someone is already unwell. The employer has no record of which worker was present, for how long, and in what conditions.</p>
+<p>A useful answer has to be affordable, has to warn the worker without a phone, and has to keep a record that an empty room cannot fake.</p>
+<ol>
+  <li>Continuously monitor temperature, humidity, and a usable air-risk signal with the parts in the kit.</li>
+  <li>Detect a sudden fall with the MPU6050.</li>
+  <li>Warn immediately, with a signal the worker can feel and one the room can see.</li>
+  <li>Record exposure duration and the conditions against a worker identity.</li>
+  <li>Stay affordable, and keep working when the workshop network is down.</li>
+</ol>
+
+<h2>2. Solution</h2>
+<p>RAKSHA sits on the bench. A known RFID card opens the shift. While a person is in front of the sensors, the node computes a heat index and a process-risk score, and it watches the accelerometer for a fall. The OLED, an RGB LED, and a vibration motor tell the worker. A fan relay and a beacon relay act on the room. A CSV file on the ESP32 is the exposure record. A phone on the node’s own access point shows the same shift.</p>
+<ul>
+  <li><strong>Presence gate.</strong> Exposure seconds increment only while PIR or IR sees a person.</li>
+  <li><strong>Free-fall gate.</strong> A fall is free-fall, then impact, then a still posture. Kiln vibration never produces the free-fall dip.</li>
+  <li><strong>Relays fail off.</strong> Both relays are off at boot and off on a sensor fault.</li>
+</ul>
+<p>The kit has no gas sensor. The air result is a process-risk score from sustained noise, humidity that is not clearing, and heat. It is not a ppm reading.</p>
+
+<h2>3. Tech stack</h2>
+<table>
+  <tr><th>Layer</th><th>Choice</th></tr>
+  <tr><td>Controller</td><td>ESP32 DevKit V1, Arduino C++</td></tr>
+  <tr><td>Climate</td><td>DHT22, NTC 10 kΩ β 3950, barometer temperature as a third vote</td></tr>
+  <tr><td>Motion</td><td>MPU6050, ±2 g, +Z up, raw read every 10 ms</td></tr>
+  <tr><td>Presence</td><td>PIR through a 74HC14, IR proximity</td></tr>
+  <tr><td>Process air</td><td>KY-037 analog envelope and a threshold potentiometer</td></tr>
+  <tr><td>Identity</td><td>RC522 RFID</td></tr>
+  <tr><td>Worker interface</td><td>SSD1306 OLED, RGB LED, vibration motor via 2N2222A and 1N4007</td></tr>
+  <tr><td>Loads</td><td>2-channel relay, fan and beacon, active-low</td></tr>
+  <tr><td>Power</td><td>12 V to an HW-411 buck, measured at 5.0 V. 74HC14 at 3.3 V</td></tr>
+  <tr><td>Record</td><td>LittleFS, /shift.csv</td></tr>
+  <tr><td>Network</td><td>STA for 10 s, then access point RAKSHA at 192.168.4.1</td></tr>
+  <tr><td>Dashboard</td><td>One HTML file, inline CSS and script, no external assets</td></tr>
+  <tr><td>Simulation</td><td>Logicraft Studios Velxio editor, simulation/raksha-logicraft.zip</td></tr>
+</table>
+<p>Not fitted: 4×4 keypad, I2C LCD, spare 1-channel relay, 2N3906, IRF9540.</p>
+
+<h2>4. Architecture</h2>
+<figure>
+  <img src="figures/architecture.svg" alt="Architecture diagram" />
+  <figcaption>Power, the ESP32 pipeline, the worker outputs, the shift file, and the dashboard.</figcaption>
+</figure>
+<pre>POWER → BOOT → SENSE → ESTIMATE → DECIDE → ACT → RECORD → SERVE</pre>
+<p>The 10 ms path reads the MPU6050 and steps the fall machine. It does not read the DHT22, write flash, or serve HTTP. Climate samples run every 2 seconds.</p>
+
+<h2>5. Pipeline</h2>
+<table>
+  <tr><th>Stage</th><th>When</th><th>Result</th></tr>
+  <tr><td>Power</td><td>Once</td><td>12 V bucked to 5.0 V for VIN, relays, and the motor</td></tr>
+  <tr><td>Boot</td><td>Every reset</td><td>Relays off first, then self-test. Fault holds the relays off</td></tr>
+  <tr><td>Sense</td><td>10 ms and 2 s</td><td>IMU fast. Climate, sound, presence, and RFID on their own clocks</td></tr>
+  <tr><td>Estimate</td><td>Same clocks</td><td>Heat index, temperature vote, risk score, presence, magnitude, tilt</td></tr>
+  <tr><td>Decide</td><td>Same clocks</td><td>Shift, band, air alert, fall state, fault</td></tr>
+  <tr><td>Act</td><td>On change</td><td>OLED, RGB, vibration, fan, beacon</td></tr>
+  <tr><td>Record</td><td>15 s and edges</td><td>One CSV row</td></tr>
+  <tr><td>Serve</td><td>On request</td><td>Dashboard. Three commands need a PIN</td></tr>
+</table>
+<h3>Heat bands</h3>
+<table>
+  <tr><th>Heat index</th><th>Band</th><th>Action</th></tr>
+  <tr><td>below 27 °C</td><td>none</td><td>Green</td></tr>
+  <tr><td>27–32 °C</td><td>caution</td><td>Amber, one vibration pulse on entry, exposure counts</td></tr>
+  <tr><td>32–39 °C</td><td>extreme caution</td><td>Amber, pulse on entry, exposure counts</td></tr>
+  <tr><td>39–51 °C</td><td>danger</td><td>Red, pulsing vibration, fan on, danger seconds count</td></tr>
+  <tr><td>above 51 °C</td><td>extreme</td><td>Red, pulsing vibration, fan on, danger seconds count</td></tr>
+</table>
+<p>The fan also closes when process risk crosses the threshold while a person is present and the heat reading is valid, even if the band is still caution.</p>
+<h3>Process risk</h3>
+<pre>stagnation  = clamp((RH − 65) / 20, 0, 1)
+heat_couple = clamp((heat_index − 27) / 12, 0, 1) if heat is valid, else 0
+score       = 100 × (0.50 × sound + 0.30 × stagnation + 0.20 × heat)
+threshold   = 30 + (pot / 4095) × 60, clamped to 30–90</pre>
+<p>Sound is a 10-second envelope. A clap dies. The score is not a gas concentration.</p>
+<h3>Fall</h3>
+<p>Free-fall is below 0.4 g for 80 ms. Impact is above 2.5 g within 500 ms. Still is a tilt past 60° while the magnitude is near 1 g, held with the PIR quiet for 2 s. The alarm latches until the same card, or a fault.</p>
+
+<h2>6. Simulation</h2>
+<figure>
+  <img src="figures/simulation-idle.png" alt="Simulator at boot" />
+  <figcaption>Boot. OLED: RAKSHA IDLE, NO WORKER, HI ---, FAN OFF IDLE.</figcaption>
+</figure>
+<p>Open logicraftstudios.tech/editor, cancel a new-project panel if it is showing, and open simulation/raksha-logicraft.zip. Run the sketch. Type RUN in the serial monitor.</p>
+<p>Stand-ins on the canvas: the CARD button is the RFID tap, the left potentiometer is the KY-037, the buzzer is the vibration motor. There is no barometer on the canvas, so the heat vote is DHT22 against the NTC.</p>
+
+<h2>7. Dashboard</h2>
+<p>The page is one instrument for one bench. The largest number is exposure time, and it advances only while someone is in the zone.</p>
+<figure>
+  <img src="figures/dashboard-boot.png" alt="Dashboard at boot" />
+  <figcaption>Boot. No worker. Exposure 0:00:00. Both relays off. No heat reading.</figcaption>
+</figure>
+<figure>
+  <img src="figures/dashboard-alarm.png" alt="Dashboard during a held fall" />
+  <figcaption>After the scripted drop. SIM-01, heat index 30.7 °C paused because the bench is empty, process risk 59, beacon on, fall held.</figcaption>
+</figure>
+<p>Five panels: the exposure chronometer, the heat capillary, the process-risk bars, the four-stage fall machine, and the shift tape with the PIN counter. Acknowledge, fan, and threshold each post a PIN. A wrong PIN is refused and nothing changes. A DHT fault clears the temperature and holds both relays off.</p>
+<p>On load the page calls GET /api/state. If the node answers, it polls every 2 seconds. If not, Play the shift runs the rehearsal. The rehearsal PIN is 1947. On the node, the PIN is the one in config.h, and the page is served at http://192.168.4.1/.</p>
+<table>
+  <tr><th>Call</th><th>Needs a PIN</th><th>Effect</th></tr>
+  <tr><td>GET /api/state</td><td>No</td><td>Current shift, heat, risk, fall, relays</td></tr>
+  <tr><td>POST /api/ack</td><td>Yes</td><td>Clears a held fall</td></tr>
+  <tr><td>POST /api/fan</td><td>Yes</td><td>Fan on or off. Refused during a fault</td></tr>
+  <tr><td>POST /api/threshold</td><td>Yes</td><td>Threshold, clamped to 30–90</td></tr>
+</table>
+
+<h2>8. Results</h2>
+<p>One RUN on the simulator. Threshold held at 57.</p>
+<table>
+  <tr><th>Step</th><th>Observed</th></tr>
+  <tr><td>Boot</td><td>Relays off. OLED up. MPU up. No worker</td></tr>
+  <tr><td>30 °C / 55% / sound 0.10 / present</td><td>Shift SIM-01. Heat index 31.9 °C. CAUTION. Risk 13.1. Fan off</td></tr>
+  <tr><td>Clap, sound 0.12</td><td>Heat index 30.7 °C. Risk 19.6. Fan stays off</td></tr>
+  <tr><td>Sustained noise, sound 0.90</td><td>Risk 58.6. Fan on. Band still CAUTION</td></tr>
+  <tr><td>Shake</td><td>Fall stays IDLE</td></tr>
+  <tr><td>Drop</td><td>FREEFALL, IMPACT, CONFIRM, ALARM. Beacon on. Fan off</td></tr>
+  <tr><td>Second card</td><td>ACK. Fall idle. Beacon off</td></tr>
+  <tr><td>DHT removed</td><td>FAULT DHT. Relays off. Heat cleared</td></tr>
+</table>
+<table>
+  <tr><th>Hidden case</th><th>Expected</th></tr>
+  <tr><td>DHT unplugged</td><td>Fault, relays off, no stale temperature</td></tr>
+  <tr><td>Shake for about 10 s</td><td>Fall stays idle</td></tr>
+  <tr><td>One clap, then sustained noise, hand on PIR</td><td>Clap ignored. Sustained noise closes the fan</td></tr>
+  <tr><td>Person leaves</td><td>Exposure pauses. It is not wiped</td></tr>
+  <tr><td>Reset while the fan is on</td><td>Relay off at boot</td></tr>
+  <tr><td>Unknown card</td><td>Shift does not open</td></tr>
+  <tr><td>Wrong PIN</td><td>HTTP 401. Nothing changes</td></tr>
+  <tr><td>No router</td><td>OLED, vibration, and the CSV continue. The page is on the access point</td></tr>
+</table>
+
+<h2>9. Where the files are</h2>
+<pre>README.md                  GitHub entry
+dashboard/index.html       the instrument page
+docs/REPORT.md             this report, in Markdown
+docs/pipeline.md           formulas, pins, config.h contract
+docs/runbook.md            build order and demo
+simulation/                canvas, sketch, and the zip to open</pre>
+</body>
+</html>
