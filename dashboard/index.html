@@ -1,0 +1,1789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RAKSHA — Bench Safety Node · SDG 8</title>
+<style>
+  :root {
+    /* Industrial Instrument Enclosure */
+    --chassis: #0b0e13;
+    --panel-bg: #151a23;
+    --panel-elevated: #1a212d;
+    --recessed: #080a0f;
+    --bezel-edge: #232b38;
+    --bezel-highlight: #344053;
+    --bezel-hairline: #1c232f;
+
+    /* High-contrast Text & Markings */
+    --ink-bright: #f8fafc;
+    --ink-norm: #e2e8f0;
+    --ink-dim: #94a3b8;
+    --ink-muted: #64748b;
+    --ink-ghost: #475569;
+
+    /* Signal & Safety Colors */
+    --safety-green: #10b981;
+    --safety-green-bright: #34d399;
+    --safety-amber: #f59e0b;
+    --safety-amber-bright: #fbbf24;
+    --safety-orange: #ea580c;
+    --safety-red: #ef4444;
+    --safety-red-bright: #f87171;
+    --safety-red-beacon: #dc2626;
+    --fault-magenta: #e11d48;
+    --instrument-cyan: #38bdf8;
+    --instrument-cyan-dim: rgba(56, 189, 248, 0.12);
+
+    /* Fonts */
+    --font-mono: ui-monospace, "SF Mono", "Liberation Mono", Menlo, Consolas, Monaco, "Courier New", monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, -system-ui, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--chassis);
+    color: var(--ink-norm);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* Industrial Instrument Chassis Border & Warning Glow */
+  body {
+    min-height: 100vh;
+    background-color: var(--chassis);
+    background-image:
+      radial-gradient(ellipse at 50% -10%, #1a2230 0%, transparent 65%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 100% 100%, 28px 28px, 28px 28px;
+    border: 3px solid #1a2230;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  body.alert {
+    border-color: var(--safety-red-beacon);
+    box-shadow: inset 0 0 40px rgba(220, 38, 38, 0.35), 0 0 25px rgba(220, 38, 38, 0.25);
+    animation: alert-chassis-pulse 1.4s ease-in-out infinite alternate;
+  }
+
+  @keyframes alert-chassis-pulse {
+    0% {
+      border-color: #7f1d1d;
+      box-shadow: inset 0 0 25px rgba(127, 29, 29, 0.3);
+    }
+    100% {
+      border-color: #ef4444;
+      box-shadow: inset 0 0 50px rgba(239, 68, 68, 0.45), 0 0 20px rgba(239, 68, 68, 0.3);
+    }
+  }
+
+  body.fault {
+    border-color: var(--fault-magenta);
+    box-shadow: inset 0 0 30px rgba(225, 29, 72, 0.25);
+  }
+
+  button, input {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  button:focus-visible,
+  input:focus-visible {
+    outline: 2px solid var(--instrument-cyan);
+    outline-offset: 2px;
+  }
+
+  /* Master Instrument Header */
+  header {
+    background: linear-gradient(180deg, #161c26 0%, #10141c 100%);
+    border-bottom: 2px solid var(--bezel-edge);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    position: relative;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  header::after {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--bezel-highlight) 30%, var(--bezel-highlight) 70%, transparent 100%);
+  }
+
+  .brand-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .seal {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #1e2634 0%, #0d1118 100%);
+    border: 2px solid var(--safety-amber);
+    box-shadow: inset 0 0 8px rgba(245, 158, 11, 0.3), 0 2px 6px rgba(0, 0, 0, 0.5);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-weight: 800;
+    font-size: 22px;
+    color: var(--safety-amber-bright);
+    letter-spacing: 0.05em;
+    position: relative;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .seal::before, .seal::after {
+    content: "";
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: var(--safety-amber);
+    border-radius: 50%;
+  }
+  .seal::before { top: 3px; left: 3px; }
+  .seal::after { bottom: 3px; right: 3px; }
+
+  .brand-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .kicker {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--safety-amber);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .kicker::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background: var(--safety-amber);
+    border-radius: 50%;
+  }
+
+  h1 {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--ink-bright);
+    line-height: 1.1;
+    text-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
+  }
+
+  .sub-tag {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  .station-link {
+    background: var(--recessed);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 4px;
+    padding: 8px 14px;
+    min-width: 260px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  }
+
+  .link {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--ink-dim);
+    text-align: right;
+  }
+
+  .link strong {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--instrument-cyan);
+    margin-bottom: 2px;
+  }
+
+  /* Main Instrument Console Layout */
+  main {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 20px 24px 44px;
+    display: grid;
+    grid-template-columns: 1.18fr 0.82fr;
+    gap: 18px;
+    width: 100%;
+  }
+
+  .instrument-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--bezel-edge);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    padding: 16px 18px;
+    position: relative;
+  }
+
+  .instrument-card::before,
+  .instrument-card::after {
+    content: "✛";
+    position: absolute;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    color: var(--bezel-highlight);
+    pointer-events: none;
+    line-height: 1;
+  }
+  .instrument-card::before { top: 5px; left: 6px; }
+  .instrument-card::after { top: 5px; right: 6px; }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--bezel-hairline);
+    gap: 8px;
+  }
+
+  .eyebrow {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  .module-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--ink-ghost);
+    text-transform: uppercase;
+  }
+
+  .fine {
+    color: var(--ink-dim);
+    font-size: 12.5px;
+    line-height: 1.42;
+    margin: 0;
+  }
+
+  /* =========================================================================
+     1. HERO: MASTER EXPOSURE CHRONOMETER (LARGEST ELEMENT ON PAGE)
+     ========================================================================= */
+  .shift {
+    grid-row: span 2;
+    background: linear-gradient(180deg, #171d27 0%, #131822 100%);
+    border: 1px solid var(--bezel-highlight);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .worker-plaque {
+    background: var(--recessed);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    position: relative;
+    border-left: 4px solid var(--safety-amber);
+  }
+
+  .worker-plaque-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  #worker {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    color: var(--ink-bright);
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+  }
+
+  #mode {
+    margin: 6px 0 0;
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--safety-amber-bright);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #mode::before {
+    content: "▶";
+    font-size: 9px;
+    color: currentColor;
+  }
+
+  body.fault #mode {
+    color: var(--fault-magenta);
+  }
+  body.alert #mode {
+    color: var(--safety-red-bright);
+  }
+
+  .clock {
+    margin-top: 4px;
+    margin-bottom: 16px;
+    padding: 18px 18px 16px;
+    background: var(--recessed);
+    border: 2px solid #202735;
+    border-radius: 6px;
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.05);
+    position: relative;
+  }
+
+  .clock-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .clock-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--instrument-cyan);
+    background: var(--instrument-cyan-dim);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+  }
+
+  #hours {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: clamp(48px, 6.5vw, 78px);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    color: var(--ink-bright);
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 18px rgba(248, 250, 252, 0.22);
+    margin: 6px 0 12px;
+    word-break: break-all;
+  }
+
+  .clock-units {
+    display: flex;
+    gap: clamp(18px, 4vw, 38px);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-ghost);
+    margin-bottom: 12px;
+    padding-left: 2px;
+  }
+
+  .legal-statement {
+    display: block;
+    color: var(--ink-dim);
+    font-size: 12px;
+    line-height: 1.4;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 10px;
+  }
+
+  .shift-aux-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: auto;
+  }
+
+  .telemetry-cell {
+    background: var(--panel-elevated);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 4px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .cell-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  #danger {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--safety-amber-bright);
+    letter-spacing: 0.02em;
+  }
+
+  body.alert #danger {
+    color: var(--safety-red-bright);
+    text-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+  }
+
+  .presence {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    padding: 3px 0;
+  }
+
+  .presence::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .presence.on {
+    color: var(--safety-green-bright);
+  }
+  .presence.on::before {
+    background: var(--safety-green);
+    box-shadow: 0 0 10px var(--safety-green), 0 0 4px #fff;
+    animation: presence-beacon-glow 2s infinite ease-in-out;
+  }
+
+  @keyframes presence-beacon-glow {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.9); }
+  }
+
+  .presence.off {
+    color: var(--safety-amber);
+  }
+  .presence.off::before {
+    background: var(--safety-amber);
+    box-shadow: 0 0 4px var(--safety-amber);
+    opacity: 0.8;
+  }
+
+  body.fault .presence.off {
+    color: var(--fault-magenta);
+  }
+  body.fault .presence.off::before {
+    background: var(--fault-magenta);
+    box-shadow: 0 0 6px var(--fault-magenta);
+  }
+
+  /* =========================================================================
+     2. HEAT INDEX SCALE & READING
+     ========================================================================= */
+  .heat {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .heat-scale-column {
+    background: var(--recessed);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 4px;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .scale {
+    position: relative;
+    height: 180px;
+    margin: 8px 0;
+  }
+
+  .mercury-track {
+    position: absolute;
+    left: 14px;
+    bottom: 0;
+    width: 12px;
+    height: 100%;
+    background: #111620;
+    border: 1px solid var(--bezel-highlight);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.9);
+  }
+
+  .mercury {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0%;
+    background: var(--safety-green);
+    transition: height 0.4s ease, background 0.3s ease;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 0 8px currentColor;
+  }
+
+  .tick {
+    position: absolute;
+    left: 34px;
+    right: 2px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-ghost);
+    padding-left: 6px;
+    border-left: 2px solid var(--bezel-highlight);
+    transform: translateY(50%);
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    line-height: 1;
+    white-space: nowrap;
+    transition: color 0.2s ease, border-left-color 0.2s ease;
+  }
+
+  .tick::before {
+    content: "";
+    position: absolute;
+    left: -12px;
+    top: 50%;
+    width: 8px;
+    height: 1px;
+    background: var(--bezel-highlight);
+  }
+
+  .tick.on {
+    color: var(--ink-bright);
+    font-weight: 700;
+    border-left-color: var(--safety-amber-bright);
+  }
+  .tick.on::before {
+    background: var(--safety-amber-bright);
+    box-shadow: 0 0 4px var(--safety-amber-bright);
+  }
+
+  .tick[data-c="51"].on {
+    color: var(--safety-red-bright);
+    border-left-color: var(--safety-red-bright);
+  }
+  .tick[data-c="51"].on::before {
+    background: var(--safety-red-bright);
+    box-shadow: 0 0 6px var(--safety-red-bright);
+  }
+
+  .t-label {
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-muted);
+  }
+  .tick.on .t-label {
+    color: var(--ink-dim);
+  }
+
+  .reading {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .reading-display-box {
+    background: var(--recessed);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+
+  .reading .num {
+    margin: 4px 0 6px;
+    font-family: var(--font-mono);
+    font-size: 50px;
+    font-weight: 800;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+    color: var(--ink-bright);
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
+  }
+
+  .reading .unit {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--safety-amber-bright);
+    margin-left: 4px;
+  }
+
+  #band {
+    margin: 6px 0 0;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--safety-amber-bright);
+    display: inline-block;
+    padding: 3px 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 3px;
+  }
+
+  body.fault #band, body.fault .reading .num {
+    color: var(--fault-magenta);
+  }
+
+  /* =========================================================================
+     3. PROCESS RISK ASSESSMENT (NOT GAS/PPM)
+     ========================================================================= */
+  .air {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .sensor-warning {
+    margin: 2px 0 0;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--safety-amber);
+    text-transform: uppercase;
+  }
+
+  .scoreline-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    background: var(--recessed);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin: 8px 0;
+  }
+
+  .scoreline {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0;
+  }
+
+  #risk {
+    font-family: var(--font-mono);
+    font-size: 46px;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--ink-bright);
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .th-tag {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-dim);
+  }
+
+  #th {
+    font-weight: 700;
+    color: var(--instrument-cyan);
+  }
+
+  .parts {
+    margin: 10px 0;
+    display: grid;
+    gap: 8px;
+  }
+
+  .part {
+    display: grid;
+    grid-template-columns: 110px 1fr 34px;
+    gap: 10px;
+    align-items: center;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-norm);
+  }
+
+  .part span:last-child {
+    font-family: var(--font-mono);
+    text-align: right;
+    font-size: 12px;
+    color: var(--instrument-cyan);
+    font-weight: 700;
+  }
+
+  .bar {
+    height: 10px;
+    background: var(--recessed);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bar i {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #10b981 0%, #f59e0b 60%, #ef4444 100%);
+    width: 0%;
+    transition: width 0.3s ease;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+  }
+
+  .loads-panel {
+    background: var(--recessed);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-top: 6px;
+  }
+
+  .loads {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+
+  .relay-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink-dim);
+    background: var(--panel-elevated);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 4px;
+    padding: 6px 10px;
+  }
+
+  .relay-item b {
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  .relay-item b.on {
+    color: var(--safety-green-bright);
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  }
+
+  #beacon.on {
+    color: var(--safety-red-bright);
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+    animation: beacon-text-strobe 0.8s infinite alternate;
+  }
+
+  @keyframes beacon-text-strobe {
+    0% { opacity: 1; }
+    100% { opacity: 0.5; }
+  }
+
+  /* =========================================================================
+     4. MPU-6050 3-AXIS FALL MACHINE (SEQUENTIAL INTERLOCK)
+     ========================================================================= */
+  .fall {
+    grid-column: 1 / -1;
+  }
+
+  #fall-line {
+    margin: 4px 0 10px;
+    color: var(--ink-dim);
+  }
+
+  .gates {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .gates li {
+    background: var(--recessed);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 4px;
+    padding: 12px 10px;
+    text-align: center;
+    color: var(--ink-muted);
+    transition: all 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+  }
+
+  .gate-index {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--ink-ghost);
+  }
+
+  .gates li strong {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .gate-sub {
+    font-size: 11px;
+    color: var(--ink-ghost);
+    line-height: 1.2;
+  }
+
+  .gates li.lit {
+    border-color: var(--safety-amber);
+    color: var(--safety-amber-bright);
+    background: rgba(245, 158, 11, 0.1);
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.15), inset 0 0 8px rgba(245, 158, 11, 0.1);
+  }
+  .gates li.lit .gate-index {
+    color: var(--safety-amber);
+  }
+  .gates li.lit .gate-sub {
+    color: var(--ink-dim);
+  }
+
+  .gates li.held {
+    background: repeating-linear-gradient(
+      -45deg,
+      #7f1d1d,
+      #7f1d1d 8px,
+      #991b1b 8px,
+      #991b1b 16px
+    );
+    color: #ffffff;
+    border-color: var(--safety-red-bright);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.6), inset 0 0 10px rgba(0, 0, 0, 0.5);
+    animation: gate-alarm-flash 0.8s infinite alternate;
+  }
+  .gates li.held .gate-index {
+    color: #fecaca;
+  }
+  .gates li.held .gate-sub {
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  @keyframes gate-alarm-flash {
+    0% {
+      border-color: #ef4444;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+    }
+    100% {
+      border-color: #fca5a5;
+      box-shadow: 0 0 28px rgba(239, 68, 68, 0.85);
+    }
+  }
+
+  /* =========================================================================
+     5. BOTTOM PANELS: SHIFT TAPE & SHOP COUNTER COMMANDS
+     ========================================================================= */
+  .bottom {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+
+  .tape-terminal {
+    background: var(--recessed);
+    border: 1px solid var(--bezel-edge);
+    border-radius: 4px;
+    padding: 8px 12px;
+    min-height: 160px;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+  }
+
+  #tape {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  #tape li {
+    display: grid;
+    grid-template-columns: 68px 1fr;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--ink-norm);
+  }
+
+  #tape li:last-child {
+    border-bottom: none;
+  }
+
+  #tape time {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--instrument-cyan);
+    letter-spacing: 0.04em;
+  }
+
+  .dock {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .rehearse {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 8px 0 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--bezel-hairline);
+  }
+
+  .rehearse-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--safety-amber);
+    text-transform: uppercase;
+    width: 100%;
+    margin-bottom: 2px;
+  }
+
+  #dock {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .dock-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  input {
+    background: var(--recessed);
+    border: 1px solid var(--bezel-highlight);
+    border-radius: 4px;
+    padding: 9px 12px;
+    color: var(--ink-bright);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.7);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    height: 42px;
+  }
+
+  input:focus {
+    border-color: var(--instrument-cyan);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.3), inset 0 1px 4px rgba(0, 0, 0, 0.7);
+  }
+
+  #pin {
+    width: 110px;
+    letter-spacing: 0.15em;
+    font-weight: 700;
+  }
+
+  #threshold {
+    width: 85px;
+    font-weight: 700;
+  }
+
+  button.act {
+    background: linear-gradient(180deg, #263143 0%, #171e29 100%);
+    color: var(--ink-bright);
+    border: 1px solid var(--bezel-highlight);
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.15s ease;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  button.act:hover {
+    background: linear-gradient(180deg, #324056 0%, #1e2735 100%);
+    border-color: var(--instrument-cyan);
+    color: #ffffff;
+  }
+
+  button.act:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  }
+
+  #ack {
+    background: linear-gradient(180deg, #991b1b 0%, #7f1d1d 100%);
+    border-color: #b91c1c;
+    color: #ffffff;
+  }
+  #ack:hover {
+    background: linear-gradient(180deg, #b91c1c 0%, #991b1b 100%);
+    border-color: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  }
+
+  button.ghost {
+    background: transparent;
+    color: var(--ink-norm);
+    border: 1px solid var(--bezel-highlight);
+    border-radius: 4px;
+    padding: 9px 13px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    transition: all 0.15s ease;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  button.ghost:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--ink-dim);
+    color: var(--ink-bright);
+  }
+
+  button.ghost:active {
+    transform: translateY(1px);
+  }
+
+  #notice {
+    min-height: 22px;
+    margin: 4px 0 0;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--instrument-cyan);
+    padding: 6px 10px;
+    border-radius: 3px;
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+  }
+
+  #notice:empty {
+    display: none;
+  }
+
+  #notice.bad {
+    color: var(--safety-red-bright);
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+
+  /* Responsive Layout (1280px to 390px) */
+  @media (max-width: 960px) {
+    main {
+      grid-template-columns: 1fr;
+      padding: 16px;
+      gap: 16px;
+    }
+    .shift {
+      grid-row: auto;
+    }
+    .bottom {
+      grid-template-columns: 1fr;
+    }
+    header {
+      padding: 14px 16px;
+    }
+    .station-link {
+      width: 100%;
+      min-width: 0;
+    }
+    .link {
+      text-align: left;
+    }
+  }
+
+  @media (max-width: 600px) {
+    body {
+      border-width: 2px;
+    }
+    main {
+      padding: 12px;
+      gap: 14px;
+    }
+    h1 {
+      font-size: 22px;
+    }
+    #worker {
+      font-size: 28px;
+    }
+    #hours {
+      font-size: clamp(42px, 11vw, 54px);
+    }
+    .clock-units {
+      gap: 18px;
+    }
+    .shift-aux-row {
+      grid-template-columns: 1fr;
+    }
+    .heat {
+      grid-template-columns: 90px 1fr;
+      gap: 12px;
+    }
+    .reading .num {
+      font-size: 42px;
+    }
+    .gates {
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .dock-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    #pin, #threshold {
+      width: 100%;
+    }
+    .rehearse {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .rehearse button,
+    button.act,
+    button.ghost {
+      width: 100%;
+      text-align: center;
+      height: 46px;
+    }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand-group">
+    <div class="seal" aria-hidden="true">R</div>
+    <div class="brand-meta">
+      <p class="kicker">SDG 8 · Decent Work & Safety</p>
+      <h1>RAKSHA</h1>
+      <p class="sub-tag">Workstation Safety Node · Problem 8-A</p>
+    </div>
+  </div>
+  <div class="station-link">
+    <p class="link" id="link"><strong>Rehearsal</strong>Waiting for the node at 192.168.4.1</p>
+  </div>
+</header>
+
+<main>
+  <!-- 1. HERO: MASTER EXPOSURE CHRONOMETER (LARGEST ELEMENT ON PAGE) -->
+  <section class="shift instrument-card">
+    <div class="card-header">
+      <span class="eyebrow">PRIMARY EXPOSURE CHRONOMETER</span>
+      <span class="module-id">CHRONO // ESP32-NV</span>
+    </div>
+
+    <div class="worker-plaque">
+      <div class="worker-plaque-top">
+        <span class="eyebrow">WORKER ON THIS BENCH</span>
+        <span class="module-id">RFID PASS</span>
+      </div>
+      <h2 id="worker">NO WORKER</h2>
+      <p id="mode">Boot. Both relays are off.</p>
+    </div>
+
+    <div class="clock">
+      <div class="clock-header">
+        <span class="eyebrow">TOTAL CUMULATIVE EXPOSURE</span>
+        <span class="clock-badge">LEGAL SHIFT LOG</span>
+      </div>
+      <span id="hours">0:00:00</span>
+      <div class="clock-units">
+        <span>Hours</span>
+        <span>Minutes</span>
+        <span>Seconds</span>
+      </div>
+      <small class="legal-statement">Counted only while a person is in the zone. An empty bench does not add time.</small>
+    </div>
+
+    <div class="shift-aux-row">
+      <div class="telemetry-cell">
+        <span class="cell-label">HAZARD BAND DURATION</span>
+        <span id="danger">Danger 0:00:00</span>
+      </div>
+      <div class="telemetry-cell">
+        <span class="cell-label">BENCH SENSOR PRESENCE</span>
+        <span class="presence off" id="presence">Bench empty</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. HEAT STRESS MONITOR (ROTHFSZ INDEX) -->
+  <section class="heat instrument-card">
+    <div class="heat-scale-column">
+      <span class="eyebrow" style="font-size: 10px;">CAPILLARY</span>
+      <div class="scale" aria-hidden="true">
+        <div class="mercury-track"><div class="mercury" id="mercury"></div></div>
+        <span class="tick" data-c="51" style="bottom: 85%">51° <span class="t-label">Ext</span></span>
+        <span class="tick" data-c="39" style="bottom: 50%">39° <span class="t-label">Dgr</span></span>
+        <span class="tick" data-c="32" style="bottom: 29%">32° <span class="t-label">Cau+</span></span>
+        <span class="tick" data-c="27" style="bottom: 15%">27° <span class="t-label">Cau</span></span>
+      </div>
+    </div>
+
+    <div class="reading">
+      <div>
+        <div class="card-header" style="margin-bottom: 6px;">
+          <span class="eyebrow">HEAT INDEX</span>
+          <span class="module-id">ROTHFSZ</span>
+        </div>
+        <div class="reading-display-box">
+          <p class="num"><span id="hi">—</span><span class="unit" id="unit"></span></p>
+          <p id="band">No reading yet</p>
+        </div>
+      </div>
+      <p class="fine">Rothfusz index. A failed sensor clears this number instead of leaving a stale temperature.</p>
+    </div>
+  </section>
+
+  <!-- 3. PROCESS RISK & VENTILATION MODULE -->
+  <section class="air instrument-card">
+    <div>
+      <div class="card-header">
+        <div>
+          <span class="eyebrow">PROCESS-AIR RISK</span>
+          <p class="sensor-warning">PROCESS LOAD ONLY · NO GAS/PPM SENSOR ON THIS NODE</p>
+        </div>
+        <span class="module-id">LOAD 50/30/20</span>
+      </div>
+
+      <div class="scoreline-row">
+        <p class="scoreline"><span id="risk">0</span><span class="fine">/ 100</span></p>
+        <span class="th-tag">FAN THRESHOLD <span id="th">57</span></span>
+      </div>
+
+      <p class="fine">Sustained shop noise, humidity that is not clearing, and heat. This node has no gas sensor. The score is not a ppm reading.</p>
+    </div>
+
+    <div class="parts" id="parts">
+      <div class="part"><span>Sound · 50%</span><div class="bar"><i id="w-sound"></i></div><span id="n-sound">0</span></div>
+      <div class="part"><span>Still air · 30%</span><div class="bar"><i id="w-stag"></i></div><span id="n-stag">0</span></div>
+      <div class="part"><span>Heat · 20%</span><div class="bar"><i id="w-heat"></i></div><span id="n-heat">0</span></div>
+    </div>
+
+    <div class="loads-panel">
+      <div class="loads">
+        <div class="relay-item"><span>Relay 1:</span> Fan <b id="fan">off</b></div>
+        <div class="relay-item"><span>Relay 2:</span> Beacon <b id="beacon">off</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. FALL DETECTION SEQUENTIAL INTERLOCK -->
+  <section class="fall instrument-card">
+    <div class="card-header">
+      <div>
+        <span class="eyebrow">MPU-6050 3-AXIS FALL MACHINE</span>
+        <p class="fine" id="fall-line">A fall is free-fall, then impact, then stillness. Shaking the bench never produces the free-fall, so it stays idle.</p>
+      </div>
+      <span class="module-id">100 HZ PIPELINE</span>
+    </div>
+
+    <ol class="gates" id="gates">
+      <li data-gate="FREEFALL">
+        <span class="gate-index">STAGE 1</span>
+        <strong>Free-fall</strong>
+        <span class="gate-sub">&lt; 0.4g drop</span>
+      </li>
+      <li data-gate="IMPACT">
+        <span class="gate-index">STAGE 2</span>
+        <strong>Impact</strong>
+        <span class="gate-sub">&gt; 2.5g collision</span>
+      </li>
+      <li data-gate="CONFIRM">
+        <span class="gate-index">STAGE 3</span>
+        <strong>Still</strong>
+        <span class="gate-sub">Inactivity check</span>
+      </li>
+      <li data-gate="ALARM">
+        <span class="gate-index">STAGE 4</span>
+        <strong>Alarm held</strong>
+        <span class="gate-sub">Beacon + Vibe locked</span>
+      </li>
+    </ol>
+  </section>
+
+  <!-- 5. SHIFT TAPE & SHOP COUNTER COMMANDS -->
+  <div class="bottom">
+    <section class="instrument-card">
+      <div class="card-header">
+        <span class="eyebrow">SHIFT TAPE · BLACK BOX LOG</span>
+        <span class="module-id">LITTLEFS FIFO</span>
+      </div>
+      <div class="tape-terminal">
+        <ol id="tape"></ol>
+      </div>
+    </section>
+
+    <section class="dock instrument-card">
+      <div>
+        <div class="card-header">
+          <span class="eyebrow">SHOP COUNTER COMMAND CONSOLE</span>
+          <span class="module-id">CONFIG.H AUTH</span>
+        </div>
+        <p class="fine">These three commands need the PIN from config.h. A wrong PIN is refused and the bench does not change. A second card tap still acknowledges with no network.</p>
+      </div>
+
+      <div class="rehearse" id="rehearse">
+        <span class="rehearse-tag">Rehearsal Scenarios · PIN 1947</span>
+        <button class="ghost" id="play" type="button">Play the shift</button>
+        <button class="ghost" id="unplug" type="button">Unplug DHT</button>
+      </div>
+
+      <form id="dock" action="/api/ack" method="post">
+        <div class="dock-row">
+          <label>PIN <input id="pin" name="pin" inputmode="numeric" autocomplete="off" placeholder="1947" /></label>
+          <button class="act" id="ack" type="button">Acknowledge</button>
+          <button class="act" id="fan-btn" type="button">Turn fan on</button>
+        </div>
+        <div class="dock-row">
+          <label>Threshold <input id="threshold" type="number" min="30" max="90" value="57" /></label>
+          <button class="ghost" id="set-th" type="button">Set</button>
+        </div>
+        <p id="notice" role="status"></p>
+      </form>
+    </section>
+  </div>
+</main>
+
+<script>
+(function () {
+  var REHEARSAL_PIN = "1947";
+  var state = {
+    live: false,
+    mode: "IDLE",
+    worker_id: "",
+    heat_index_c: null,
+    heat_valid: false,
+    heat_band: "NONE",
+    risk_score: 0,
+    risk_threshold: 57,
+    present: false,
+    fall_state: "IDLE",
+    fan_on: false,
+    beacon_on: false,
+    exposure_s: 0,
+    danger_s: 0,
+    fault_reason: "NONE",
+    parts: { sound: 0, stag: 0, heat: 0 },
+    tape: [{ t: "0:00", text: "Boot. Relays off. No shift open." }]
+  };
+  var playTimer = null;
+  var clockTimer = null;
+
+  var BANDS = [
+    { name: "NONE", label: "Below caution", color: "#10b981", from: 0 },
+    { name: "CAUTION", label: "Caution", color: "#f59e0b", from: 27 },
+    { name: "EXTREME_CAUTION", label: "Extreme caution", color: "#ea580c", from: 32 },
+    { name: "DANGER", label: "Danger", color: "#ef4444", from: 39 },
+    { name: "EXTREME", label: "Extreme", color: "#b91c1c", from: 51 }
+  ];
+
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function clock(s) {
+    s = Math.max(0, Math.floor(s));
+    return Math.floor(s / 3600) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60);
+  }
+  function bandMeta(name) {
+    for (var i = 0; i < BANDS.length; i++) if (BANDS[i].name === name) return BANDS[i];
+    return BANDS[0];
+  }
+  function note(text, bad) {
+    var el = document.getElementById("notice");
+    el.textContent = text;
+    el.className = bad ? "bad" : "";
+  }
+  function stamp() {
+    var d = new Date();
+    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+  function pushTape(text) {
+    state.tape.unshift({ t: stamp(), text: text });
+    state.tape = state.tape.slice(0, 8);
+  }
+
+  function render() {
+    var fault = state.fault_reason && state.fault_reason !== "NONE";
+    document.body.className = fault ? "fault" : (state.fall_state === "ALARM" || state.mode === "ALERT" ? "alert" : "");
+    document.getElementById("worker").textContent = state.worker_id || "NO WORKER";
+    var modeLine = "Boot. Both relays are off.";
+    if (fault) modeLine = "Fault " + state.fault_reason + ". Both relays are off.";
+    else if (state.mode === "SHIFT") modeLine = "Shift open.";
+    else if (state.mode === "ALERT") modeLine = "Alarm. The worker can feel it.";
+    else if (state.mode === "IDLE" && state.worker_id) modeLine = "Shift closed.";
+    document.getElementById("mode").textContent = modeLine;
+    document.getElementById("hours").textContent = clock(state.exposure_s);
+    document.getElementById("danger").textContent = "Danger " + clock(state.danger_s);
+    var presence = document.getElementById("presence");
+    if (state.present && !fault) {
+      presence.textContent = "In the zone";
+      presence.className = "presence on";
+    } else if (fault) {
+      presence.textContent = "Clock stopped";
+      presence.className = "presence off";
+    } else {
+      presence.textContent = state.worker_id ? "Bench empty · clock paused" : "Bench empty";
+      presence.className = "presence off";
+    }
+
+    var hi = document.getElementById("hi");
+    var unit = document.getElementById("unit");
+    var band = document.getElementById("band");
+    var mercury = document.getElementById("mercury");
+    if (!state.heat_valid || state.heat_index_c == null || fault) {
+      hi.textContent = "—";
+      unit.textContent = "";
+      band.textContent = fault ? "No reading · " + state.fault_reason : "No reading yet";
+      mercury.style.height = "0%";
+      mercury.style.background = "transparent";
+    } else {
+      hi.textContent = Number(state.heat_index_c).toFixed(1);
+      unit.textContent = "°C";
+      var fromNumber = BANDS[0];
+      for (var b = BANDS.length - 1; b >= 0; b--) {
+        if (state.heat_index_c >= BANDS[b].from) { fromNumber = BANDS[b]; break; }
+      }
+      var reported = bandMeta(state.heat_band);
+      var paused = state.heat_band === "NONE" && fromNumber.name !== "NONE";
+      band.textContent = paused ? "Paused · bench empty" : reported.label;
+      var pct = Math.max(0, Math.min(100, ((state.heat_index_c - 22) / 34) * 100));
+      mercury.style.height = pct + "%";
+      mercury.style.background = fromNumber.color;
+    }
+    var ticks = document.querySelectorAll(".tick");
+    for (var i = 0; i < ticks.length; i++) {
+      var mark = Number(ticks[i].getAttribute("data-c"));
+      var active = state.heat_valid && state.heat_index_c >= mark;
+      ticks[i].className = active ? "tick on" : "tick";
+    }
+
+    document.getElementById("risk").textContent = Math.round(state.risk_score);
+    document.getElementById("th").textContent = Math.round(state.risk_threshold);
+    document.getElementById("threshold").value = Math.round(state.risk_threshold);
+    var parts = state.parts || { sound: 0, stag: 0, heat: 0 };
+    document.getElementById("w-sound").style.width = Math.max(0, Math.min(100, parts.sound)) + "%";
+    document.getElementById("w-stag").style.width = Math.max(0, Math.min(100, parts.stag)) + "%";
+    document.getElementById("w-heat").style.width = Math.max(0, Math.min(100, parts.heat)) + "%";
+    document.getElementById("n-sound").textContent = Math.round(parts.sound);
+    document.getElementById("n-stag").textContent = Math.round(parts.stag);
+    document.getElementById("n-heat").textContent = Math.round(parts.heat);
+    var fan = document.getElementById("fan");
+    var beacon = document.getElementById("beacon");
+    fan.textContent = state.fan_on ? "on" : "off";
+    beacon.textContent = state.beacon_on ? "on" : "off";
+    fan.className = state.fan_on ? "on" : "";
+    beacon.className = state.beacon_on ? "on" : "";
+    document.getElementById("fan-btn").textContent = state.fan_on ? "Turn fan off" : "Turn fan on";
+
+    var order = ["FREEFALL", "IMPACT", "CONFIRM", "ALARM"];
+    var at = order.indexOf(state.fall_state);
+    var gates = document.querySelectorAll("#gates li");
+    for (var g = 0; g < gates.length; g++) {
+      gates[g].className = "";
+      if (at >= g) gates[g].className = "lit";
+      if (state.fall_state === "ALARM" && gates[g].getAttribute("data-gate") === "ALARM") gates[g].className = "lit held";
+    }
+    var fallLine = document.getElementById("fall-line");
+    if (state.fall_state === "ALARM") fallLine.textContent = "Alarm is held. The beacon is on until this worker’s card, or an acknowledge with the PIN.";
+    else if (state.fall_state === "IDLE") fallLine.textContent = "A fall is free-fall, then impact, then stillness. Shaking the bench never produces the free-fall, so it stays idle.";
+    else fallLine.textContent = "Fall in progress: " + state.fall_state + ".";
+
+    var tape = document.getElementById("tape");
+    tape.innerHTML = "";
+    state.tape.forEach(function (row) {
+      var li = document.createElement("li");
+      var time = document.createElement("time");
+      time.textContent = row.t;
+      li.appendChild(time);
+      li.appendChild(document.createTextNode(row.text));
+      tape.appendChild(li);
+    });
+
+    var link = document.getElementById("link");
+    if (state.live) {
+      link.innerHTML = "<strong>Live · RAKSHA</strong>192.168.4.1 · polling every 2 s";
+      document.getElementById("rehearse").hidden = true;
+    }
+  }
+
+  function apply(next, tapeText) {
+    Object.keys(next).forEach(function (k) { state[k] = next[k]; });
+    if (tapeText) pushTape(tapeText);
+    render();
+  }
+
+  function pinOk(pin) {
+    if (state.live) return true;
+    return String(pin) === REHEARSAL_PIN;
+  }
+
+  function send(path, body) {
+    if (!state.live) {
+      if (!pinOk(body.pin)) {
+        note("PIN refused. The bench did not change.", true);
+        pushTape("Wrong PIN. No change.");
+        render();
+        return;
+      }
+      if (path === "/api/ack") {
+        if (state.fall_state !== "ALARM") {
+          note("No alarm is held.");
+          return;
+        }
+        apply({
+          fall_state: "IDLE",
+          beacon_on: false,
+          mode: state.fault_reason !== "NONE" ? "FAULT" : "SHIFT",
+          fan_on: false
+        }, "Acknowledged. Beacon off.");
+        note("Acknowledged. Beacon off.");
+        return;
+      }
+      if (path === "/api/fan") {
+        if (state.fault_reason !== "NONE") {
+          note("Fault is holding both relays off.");
+          return;
+        }
+        apply({ fan_on: !!body.on }, body.on ? "Fan turned on from the counter." : "Fan turned off from the counter.");
+        note(body.on ? "Fan on." : "Fan off.");
+        return;
+      }
+      if (path === "/api/threshold") {
+        var value = Math.max(30, Math.min(90, Number(body.value)));
+        apply({ risk_threshold: value }, "Threshold set to " + value + ".");
+        note("Threshold is " + value + ".");
+      }
+      return;
+    }
+    fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      if (res.status === 401) {
+        note("PIN refused. The bench did not change.", true);
+        return;
+      }
+      if (!res.ok) {
+        note("The node refused that command.", true);
+        return;
+      }
+      note("Command accepted.");
+      return pull();
+    }).catch(function () {
+      note("The node did not answer.", true);
+    });
+  }
+
+  function pull() {
+    return fetch("/api/state", { cache: "no-store" }).then(function (res) {
+      if (!res.ok) throw new Error("state");
+      return res.json();
+    }).then(function (data) {
+      state.live = true;
+      var prevFall = state.fall_state;
+      var prevFault = state.fault_reason;
+      apply(data);
+      if (data.rows && data.rows.length) {
+        state.tape = data.rows.slice(0, 8).map(function (row) {
+          return { t: row.t || "", text: row.text || JSON.stringify(row) };
+        });
+      } else if (data.fall_state === "ALARM" && prevFall !== "ALARM") {
+        pushTape("Fall alarm. Beacon on.");
+      } else if (data.fault_reason && data.fault_reason !== "NONE" && data.fault_reason !== prevFault) {
+        pushTape("Fault " + data.fault_reason + ". Relays off.");
+      }
+      render();
+    });
+  }
+
+  function parts(sound, rh, hi) {
+    var stag = Math.max(0, Math.min(1, (rh - 65) / 20));
+    var heat = Math.max(0, Math.min(1, (hi - 27) / 12));
+    return {
+      sound: 100 * 0.5 * sound,
+      stag: 100 * 0.3 * stag,
+      heat: 100 * 0.2 * heat
+    };
+  }
+
+  var script = [
+    { delay: 400, patch: { mode: "SHIFT", worker_id: "SIM-01", present: true, heat_valid: true, heat_index_c: 31.9, heat_band: "CAUTION", risk_score: 13.1, fan_on: false, beacon_on: false, fall_state: "IDLE", fault_reason: "NONE", parts: parts(0.10, 55, 31.9) }, text: "Card SIM-01. 30 °C / 55%. Caution. Fan off." },
+    { delay: 1800, patch: { heat_index_c: 30.7, heat_band: "CAUTION", risk_score: 19.6, parts: parts(0.12, 70, 30.7) }, text: "Clap. Risk 20. A short noise does not start the fan." },
+    { delay: 1800, patch: { risk_score: 58.6, fan_on: true, mode: "ALERT", parts: parts(0.90, 70, 30.7) }, text: "Sustained noise. Risk 59. Fan on while heat is still caution." },
+    { delay: 1800, patch: { fall_state: "IDLE" }, text: "Bench shaken. No free-fall. Fall stays idle." },
+    { delay: 1600, patch: { present: false, fan_on: false, mode: "ALERT", fall_state: "FREEFALL", heat_band: "NONE" }, text: "Drop. Free-fall." },
+    { delay: 500, patch: { fall_state: "IMPACT" }, text: "Impact." },
+    { delay: 500, patch: { fall_state: "CONFIRM" }, text: "Still posture." },
+    { delay: 700, patch: { fall_state: "ALARM", beacon_on: true, mode: "ALERT" }, text: "Alarm held. Beacon on. Fan released. Person is gone." }
+  ];
+
+  function play() {
+    if (playTimer) clearTimeout(playTimer);
+    state.exposure_s = 0;
+    state.danger_s = 0;
+    apply({
+      mode: "IDLE", worker_id: "", present: false, heat_valid: false, heat_index_c: null,
+      heat_band: "NONE", risk_score: 0, fan_on: false, beacon_on: false, fall_state: "IDLE",
+      fault_reason: "NONE", parts: { sound: 0, stag: 0, heat: 0 }
+    }, "Shift replay started.");
+    var i = 0;
+    function step() {
+      if (i >= script.length) {
+        note("Alarm is held. Acknowledge with PIN 1947, or tap the card.");
+        return;
+      }
+      var item = script[i++];
+      playTimer = setTimeout(function () {
+        apply(item.patch, item.text);
+        step();
+      }, item.delay);
+    }
+    step();
+  }
+
+  function unplug() {
+    if (playTimer) clearTimeout(playTimer);
+    apply({
+      mode: "FAULT",
+      fault_reason: "DHT",
+      heat_valid: false,
+      heat_index_c: null,
+      heat_band: "NONE",
+      fan_on: false,
+      beacon_on: false,
+      present: false,
+      airAlert: false,
+      fall_state: "IDLE"
+    }, "DHT unplugged. Fault. Both relays off.");
+    note("Fault DHT. Both relays off. The last temperature was cleared.");
+  }
+
+  document.getElementById("play").addEventListener("click", play);
+  document.getElementById("unplug").addEventListener("click", unplug);
+  document.getElementById("ack").addEventListener("click", function () {
+    send("/api/ack", { pin: document.getElementById("pin").value });
+  });
+  document.getElementById("fan-btn").addEventListener("click", function () {
+    send("/api/fan", { pin: document.getElementById("pin").value, on: !state.fan_on });
+  });
+  document.getElementById("set-th").addEventListener("click", function () {
+    send("/api/threshold", { pin: document.getElementById("pin").value, value: Number(document.getElementById("threshold").value) });
+  });
+  document.getElementById("dock").addEventListener("submit", function (event) {
+    event.preventDefault();
+    send("/api/ack", { pin: document.getElementById("pin").value });
+  });
+
+  clockTimer = setInterval(function () {
+    if (state.live) return;
+    var fault = state.fault_reason && state.fault_reason !== "NONE";
+    if (!state.present || !state.heat_valid || fault) return;
+    if (state.mode !== "SHIFT" && state.mode !== "ALERT") return;
+    state.exposure_s += 1;
+    if (state.heat_band === "DANGER" || state.heat_band === "EXTREME") state.danger_s += 1;
+    document.getElementById("hours").textContent = clock(state.exposure_s);
+    document.getElementById("danger").textContent = "Danger " + clock(state.danger_s);
+  }, 1000);
+
+  render();
+  pull().catch(function () { state.live = false; render(); });
+  setInterval(function () { if (state.live) pull().catch(function () {}); }, 2000);
+})();
+</script>
+</body>
+</html>

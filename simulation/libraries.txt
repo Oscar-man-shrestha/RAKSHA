@@ -1,0 +1,4 @@
+DHT sensor library for ESPx
+Adafruit GFX Library
+Adafruit SSD1306
+Adafruit BusIO

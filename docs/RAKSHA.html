@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RAKSHA — Heat and Air-Safety Monitor</title>
+<style>
+  @page { size: A4; margin: 14mm 14mm 16mm 14mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #1c2430;
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+  h1 { font-size: 22pt; line-height: 1.15; margin: 0 0 4px; letter-spacing: -0.3px; }
+  h2 {
+    font-size: 13pt;
+    margin: 18px 0 6px;
+    color: #14324f;
+    border-bottom: 1.5px solid #14324f;
+    padding-bottom: 2px;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 11pt; margin: 12px 0 4px; color: #14324f; page-break-after: avoid; }
+  p { margin: 0 0 7px; }
+  ul, ol { margin: 4px 0 8px; padding-left: 18px; }
+  li { margin: 0 0 3px; }
+  code, .mono {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 9pt;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; page-break-inside: avoid; }
+  th, td { border: 1px solid #c9d2dc; padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: #14324f; color: white; font-weight: 600; font-size: 9pt; }
+  tr:nth-child(even) td { background: #f4f7fa; }
+  .cover {
+    background: #14324f;
+    color: white;
+    margin: -14mm -14mm 14px;
+    padding: 18mm 14mm 12mm;
+  }
+  .cover .kicker { letter-spacing: 1.5px; font-size: 9pt; text-transform: uppercase; color: #9fd0ff; margin: 0 0 8px; }
+  .cover h1 { color: white; font-size: 28pt; }
+  .cover p { color: #d7e4f0; margin: 0; }
+  .meta { margin-top: 14px; width: 100%; }
+  .meta td { border: none; background: transparent !important; color: #d7e4f0; padding: 2px 12px 2px 0; }
+  .meta strong { color: white; }
+  .pipe {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: #f4f7fa;
+    border-left: 4px solid #1d6fb8;
+    padding: 8px 10px;
+    margin: 8px 0;
+    font-size: 9pt;
+    line-height: 1.35;
+    white-space: pre-wrap;
+  }
+  .note {
+    background: #fff8e8;
+    border: 1px solid #e6d3a1;
+    padding: 7px 10px;
+    margin: 8px 0 10px;
+    page-break-inside: avoid;
+  }
+  .step { page-break-inside: avoid; }
+  a { color: #1d6fb8; text-decoration: none; }
+  .small { font-size: 9pt; color: #3d4b5c; }
+  .keep { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <p class="kicker">SDG 8 · Decent Work and Economic Growth · Problem 8-A</p>
+  <h1>RAKSHA</h1>
+  <p>Heat and air-safety monitor for informal workers. Workstation node for brick kilns, welding shops, tailoring units, and construction sites.</p>
+  <table class="meta">
+    <tr><td><strong>Simulate at</strong></td><td>https://logicraftstudios.tech/editor/</td></tr>
+    <tr><td><strong>Project file</strong></td><td>simulation/raksha-logicraft.zip</td></tr>
+    <tr><td><strong>Board</strong></td><td>ESP32 DevKit V1</td></tr>
+    <tr><td><strong>Round</strong></td><td>3 hours · pitch in seven sections · 3-minute defence</td></tr>
+  </table>
+</section>
+
+<h2>1. What the node does</h2>
+<p>RAKSHA watches heat, process-air risk, and falls. It warns the worker with a vibration motor and an RGB lamp, because a buzzer is lost in kiln and welding noise. A fan relay and a beacon relay act on the room. Exposure time is stored against the worker who checked in with an RFID card, and it counts only while that worker is in the zone.</p>
+<p>Three decisions carry the design:</p>
+<ul>
+  <li><strong>Presence gate.</strong> PIR or IR must see a person before heat or air time accumulates. An empty bench does not invent hours.</li>
+  <li><strong>Free-fall gate.</strong> A fall is a short free-fall, then an impact, then a still posture. Shaking the bench never produces the free-fall, so kiln vibration is rejected.</li>
+  <li><strong>Relays fail off.</strong> Both relays are off at boot and off on a sensor fault. Past a real threshold the fan closes. On a latched fall the beacon closes.</li>
+</ul>
+<div class="note">This kit has no gas sensor. The air result is a process-risk score: sustained shop noise, humidity that is not clearing, and heat, gated by presence. Say that in the pitch. The KY-037 is not a ppm meter.</div>
+
+<h2>2. Pipeline</h2>
+<div class="pipe">POWER → BOOT → SENSE → ESTIMATE → DECIDE → ACT → RECORD → SERVE</div>
+<table>
+  <tr><th>Stage</th><th>When</th><th>Result</th></tr>
+  <tr><td>Power</td><td>Once, before logic</td><td>12 V through the HW-411, measured at 5.0 V, feeds the ESP32 VIN, the relay board, and the motor supply.</td></tr>
+  <tr><td>Boot</td><td>Every reset</td><td>Relay pins driven inactive first. Then I2C, DHT22, and RFID are checked. A failed critical sensor stays in fault. Relays stay off.</td></tr>
+  <tr><td>Sense</td><td>10 ms and 2 s</td><td>MPU6050 every 10 ms. DHT22, NTC, barometer, sound, potentiometer, PIR, and IR every 2 s. RFID on tap.</td></tr>
+  <tr><td>Estimate</td><td>Same clocks</td><td>Heat index, three-thermometer vote, 0–100 process-risk score, presence, acceleration magnitude, tilt.</td></tr>
+  <tr><td>Decide</td><td>Same clocks</td><td>Shift, heat band, air alert, fall state, fault. Commands need the PIN.</td></tr>
+  <tr><td>Act</td><td>On change</td><td>OLED, RGB, vibration, fan relay, beacon relay.</td></tr>
+  <tr><td>Record</td><td>15 s and every edge</td><td>One CSV row in flash: worker, heat, risk, presence, fall, relays.</td></tr>
+  <tr><td>Serve</td><td>Continuous</td><td>Dashboard on the RAKSHA access point at 192.168.4.1 if the workshop router is down. Ack, fan, and threshold need the PIN.</td></tr>
+</table>
+<p>The 10 ms fall path never waits on the DHT22, the filesystem, or HTTP. Every threshold and pin lives in one <span class="mono">config.h</span>.</p>
+
+<h2>3. Simulation on Logicraft Studios</h2>
+<p>The simulation runs in the browser at <strong>https://logicraftstudios.tech/editor/</strong>. It is the Velxio editor. It compiles the ESP32 sketch and runs it against the wired canvas. The project is a Wokwi zip, which that editor opens directly.</p>
+
+<h3>Open the project</h3>
+<ol>
+  <li>Open https://logicraftstudios.tech/editor/ .</li>
+  <li>If a “Start a new project” panel is showing, press Cancel.</li>
+  <li>Press the open-folder control, <em>Open project (.vlx Logicraft Studios or .zip Wokwi)</em>.</li>
+  <li>Choose <span class="mono">simulation/raksha-logicraft.zip</span>.</li>
+  <li>Press Libraries and confirm these four are installed: DHT sensor library for ESPx, Adafruit GFX Library, Adafruit SSD1306, Adafruit BusIO. Install any that are missing.</li>
+  <li>Press the compile / run control. Open Serial at 115200.</li>
+  <li>In the serial send box, type <span class="mono">RUN</span> and send it.</li>
+</ol>
+<p>The scripted run lasts about 20 seconds. It uses the same heat-index function, the same risk weights, and the same fall state machine as the bench firmware. The serial monitor is the simulation record for the pitch.</p>
+
+<div class="note">
+<strong>Canvas stand-ins.</strong> Logicraft has no RC522 and no KY-037.
+The green CARD button is the RFID tap. The left potentiometer is the sound envelope. The buzzer is the vibration motor on GPIO 16. The barometer, the IR sensor, the buck converter, and the 74HC14 stay on the bench; they are not on this canvas. The heat vote in the simulator is DHT22 against the NTC only.
+</div>
+
+<h3>What is on the canvas</h3>
+<table>
+  <tr><th>Canvas part</th><th>GPIO</th><th>Bench part it represents</th></tr>
+  <tr><td>ESP32 DevKit V1</td><td>—</td><td>ESP32</td></tr>
+  <tr><td>SSD1306 OLED</td><td>21 SDA, 22 SCL</td><td>OLED. The I2C LCD stays in the bag.</td></tr>
+  <tr><td>MPU6050, +Z up</td><td>21, 22</td><td>MPU6050</td></tr>
+  <tr><td>DHT22, slider for °C and RH</td><td>4</td><td>DHT22</td></tr>
+  <tr><td>NTC module, β = 3950</td><td>36 (VP)</td><td>NTC divider</td></tr>
+  <tr><td>PIR, “Simulate Motion”</td><td>34</td><td>PIR after the 74HC14</td></tr>
+  <tr><td>Potentiometer, start at 15%</td><td>32</td><td>KY-037 analog</td></tr>
+  <tr><td>Potentiometer, start at 45%</td><td>33</td><td>Threshold potentiometer. 45% maps to threshold 57.</td></tr>
+  <tr><td>Green CARD button</td><td>27, pull-up</td><td>RFID. Press once to open the shift. Press again during an alarm to acknowledge.</td></tr>
+  <tr><td>Relay module</td><td>17 (TX2), active-low</td><td>Fan relay</td></tr>
+  <tr><td>Relay module</td><td>26, active-low</td><td>Beacon relay</td></tr>
+  <tr><td>Red, green, blue LEDs, 220 Ω</td><td>25, 13, 14</td><td>RGB LED</td></tr>
+  <tr><td>Buzzer</td><td>16 (RX2)</td><td>Vibration motor through the 2N2222A and the 1N4007</td></tr>
+</table>
+
+<h3>Scripted scenario</h3>
+<p>Type <span class="mono">RUN</span>. The firmware holds the threshold at 57 and plays eight steps. Reference values below come from the same formulas as the sketch. The serial line is the result to screenshot.</p>
+<table>
+  <tr><th>Time</th><th>Step</th><th>What you must see</th></tr>
+  <tr><td>0.5 s</td><td>Card, then 30 °C / 55% RH, worker present, sound envelope 0.10</td><td><span class="mono">SHIFT worker=SIM-01</span>. Heat index about 31.9 °C, band CAUTION, risk about 13, fan off, beacon off.</td></tr>
+  <tr><td>2.5 s</td><td>Clap: 28 °C / 70% RH, envelope 0.12</td><td>Heat index about 30.7 °C, still CAUTION, risk about 20, air off, fan off. A short noise does not trip the fan.</td></tr>
+  <tr><td>5 s</td><td>Settled noise: same climate, envelope 0.90</td><td>Risk about 59, <span class="mono">air=1</span>, <span class="mono">fan=1</span>. The band is still CAUTION, so the fan closed because of process risk, not because the heat band reached danger.</td></tr>
+  <tr><td>8 s</td><td>Shake for 2.5 s, magnitude stays above 1 g</td><td>No <span class="mono">FALL FREEFALL</span> line. Fall stays IDLE.</td></tr>
+  <tr><td>10.5 s</td><td>Drop: 100 ms at 0.15 g, then 3.2 g, then a tilted still posture and no presence</td><td><span class="mono">FALL FREEFALL</span>, <span class="mono">IMPACT</span>, <span class="mono">CONFIRM</span>, <span class="mono">ALARM</span>. Beacon relay on. Buzzer on. Fan releases, because the air alert requires a person present.</td></tr>
+  <tr><td>15 s</td><td>Second card tap</td><td><span class="mono">ACK</span>. Fall returns to IDLE. Beacon off.</td></tr>
+  <tr><td>17 s</td><td>DHT removed</td><td><span class="mono">FAULT DHT relays=OFF</span>. Red LED blinks. Both relays off.</td></tr>
+  <tr><td>19 s</td><td>End</td><td><span class="mono">RUN done</span>.</td></tr>
+</table>
+<p class="small">RUN applies the settled 10-second sound envelope so the pitch fits in one pass. In live mode the envelope really is a 10-second average: a clap dies away, and the sound potentiometer has to be held up. Live mode also reads the DHT22 slider, the NTC slider, the PIR “Simulate Motion” button, both potentiometers, and the CARD button. Other serial commands: CARD, DROP, SHAKE, UNPLUG, HELP.</p>
+
+<h3>Screenshot for the Simulation slide</h3>
+<p>Capture the serial transcript from <span class="mono">RUN start</span> through <span class="mono">FAULT DHT relays=OFF</span>, with the canvas visible enough to show the fan relay during the noise step and the beacon relay during the alarm. That single capture is the simulation section of the pitch.</p>
+
+<h2>4. Algorithms</h2>
+<h3>Heat index</h3>
+<p>Convert DHT temperature to °F. If the simple screening value averages under 80 °F with the air temperature, use that screening value. Otherwise use the Rothfusz regression, including the low-humidity and high-humidity corrections, then convert back to °C.</p>
+<table>
+  <tr><th>Heat index °C</th><th>Band</th><th>While a worker is present</th></tr>
+  <tr><td>below 27</td><td>None</td><td>Green. Counters idle.</td></tr>
+  <tr><td>27 to 32</td><td>Caution</td><td>Amber. One short vibration pulse. Exposure seconds increment.</td></tr>
+  <tr><td>32 to 39</td><td>Extreme caution</td><td>Amber. Exposure seconds increment.</td></tr>
+  <tr><td>39 to 51</td><td>Danger</td><td>Red. Repeating vibration. Fan on. Danger seconds increment.</td></tr>
+  <tr><td>above 51</td><td>Extreme</td><td>Same as danger.</td></tr>
+</table>
+
+<h3>Temperature vote</h3>
+<p>Compare the DHT22 with the NTC and with the barometer temperature. Heat is invalid only when the DHT misses both of the others by more than 8 °C. In the simulator there is no barometer, so the comparison is DHT against NTC. Invalid heat forces the relays off and the OLED shows a sensor fault. A single disagreeing sensor does not do that.</p>
+
+<h3>Process-risk score</h3>
+<div class="pipe">stagnation   = clamp((RH − 65) / 20, 0, 1)
+heat_couple  = clamp((heat_index_C − 27) / 12, 0, 1)
+risk         = 100 × (0.50 × sound_ema + 0.30 × stagnation + 0.20 × heat_couple)
+threshold    = 30 + (potentiometer × 60)     range 30 to 90
+air_alert    = worker present AND heat valid AND risk ≥ threshold</div>
+<p><span class="mono">sound_ema</span> is a 10-second exponential average of the KY-037 analog pin, normalised to 0–1. The weights are 0.50, 0.30, and 0.20.</p>
+
+<h3>Fall machine</h3>
+<p>Magnitude is the root-sum-square of the three accelerometer axes in g. Mount the board with +Z up. Tilt is computed only while the magnitude is between 0.7 g and 1.3 g, so the impact spike itself cannot look like a posture change.</p>
+<table>
+  <tr><th>From</th><th>To</th><th>Rule</th></tr>
+  <tr><td>Idle</td><td>Free-fall</td><td>Magnitude stays under 0.4 g for at least 80 ms.</td></tr>
+  <tr><td>Free-fall</td><td>Impact</td><td>Magnitude exceeds 2.5 g within 500 ms. Otherwise return to idle.</td></tr>
+  <tr><td>Impact</td><td>Confirm</td><td>Tilt passes 60° from upright and the PIR is quiet.</td></tr>
+  <tr><td>Confirm</td><td>Alarm</td><td>That posture holds for 2 s. If the worker moves, return to idle.</td></tr>
+  <tr><td>Alarm</td><td>Idle</td><td>The same worker’s card is tapped again, or a fault clears the node.</td></tr>
+</table>
+<p>The alarm latches the beacon and the vibration. Gyro data is not used.</p>
+
+<h2>5. Bench hardware</h2>
+<p>Set the HW-411 to 5.0 V with a multimeter before the ESP32 is connected. That rail feeds VIN and the relay board. The vibration motor is powered from 5 V through the 2N2222A, with the 1N4007 across the motor, cathode at 5 V. The ESP32 3.3 V pin does not feed the motor or the relays.</p>
+<p>Power the 74HC14 from 3.3 V and use it to clean the PIR and the KY-037 digital pin. A 5 V high into an ESP32 GPIO damages the pin. Analog signals stay on ADC1, because Wi-Fi uses ADC2.</p>
+<table>
+  <tr><th>Function</th><th>GPIO</th><th>Note</th></tr>
+  <tr><td>I2C SDA / SCL</td><td>21 / 22</td><td>OLED 0x3C, MPU6050 0x68, barometer 0x76 or 0x77</td></tr>
+  <tr><td>RFID RC522</td><td>18, 19, 23, SS 5, RST 27</td><td>SPI. Second tap acknowledges. Unknown card is refused.</td></tr>
+  <tr><td>DHT22</td><td>4</td><td>10 kΩ to 3.3 V</td></tr>
+  <tr><td>KY-037 analog</td><td>32</td><td>ADC1</td></tr>
+  <tr><td>Potentiometer</td><td>33</td><td>ADC1, threshold</td></tr>
+  <tr><td>PIR via 74HC14</td><td>34</td><td>Input only</td></tr>
+  <tr><td>IR proximity</td><td>35</td><td>Input only</td></tr>
+  <tr><td>NTC divider</td><td>36</td><td>10 kΩ from 3.3 V to the node, NTC to ground. β = 3950, R0 = 10 kΩ</td></tr>
+  <tr><td>Vibration base</td><td>16</td><td>1 kΩ into the 2N2222A</td></tr>
+  <tr><td>Fan relay / beacon relay</td><td>17 / 26</td><td>Active-low. Pull each input to the off level so a reset cannot glitch the load.</td></tr>
+  <tr><td>RGB</td><td>25, 13, 14</td><td>220 Ω, common cathode</td></tr>
+</table>
+<p>Leave unwired: the 4×4 keypad, the I2C LCD, the spare 1-channel relay, the 2N3906, and the IRF9540. The keypad’s eight pins collide with this map. RFID second-tap is the offline acknowledge.</p>
+
+<h3>Measurements to write on the results slide</h3>
+<table>
+  <tr><th>Measurement</th><th>Pass</th></tr>
+  <tr><td>Buck, unloaded and with the ESP32 connected</td><td>4.8 V to 5.2 V both times</td></tr>
+  <tr><td>NTC at room temperature and in a warm hand</td><td>Warm hand reads higher. Record both.</td></tr>
+  <tr><td>Fall trial</td><td>Ten seconds of shaking stays idle. A drop onto foam from about 30 cm reaches alarm.</td></tr>
+  <tr><td>Reset while a relay is on</td><td>Both relays are off while the OLED is still on the self-test line.</td></tr>
+</table>
+
+<h2>6. Faults to rehearse</h2>
+<table>
+  <tr><th>Action</th><th>Required result</th></tr>
+  <tr><td>Unplug the DHT22 during a shift</td><td>Fault on screen. Both relays off. The old temperature is not left up as a safe reading.</td></tr>
+  <tr><td>Shake the MPU for 10 s</td><td>Fall stays idle.</td></tr>
+  <tr><td>Drop the MPU onto foam</td><td>Alarm, vibration, beacon.</td></tr>
+  <tr><td>One clap, then 10 s of noise with a hand on the PIR</td><td>The clap does nothing. Sustained noise with presence turns the fan on.</td></tr>
+  <tr><td>Leave the zone</td><td>After 60 s the exposure counter pauses. It is not cleared.</td></tr>
+  <tr><td>Reset while the fan is on</td><td>The relay drops at boot and stays off until a new shift is in danger or air alert.</td></tr>
+  <tr><td>Unknown RFID card</td><td>Shift does not start.</td></tr>
+  <tr><td>Dashboard command with the wrong PIN</td><td>Rejected. State unchanged.</td></tr>
+  <tr><td>No router</td><td>OLED, vibration, and the CSV continue. The page loads on the RAKSHA access point.</td></tr>
+</table>
+
+<h2>7. Pitch order</h2>
+<p>The round asks for seven sections, then a defence of about three minutes.</p>
+<ol>
+  <li><strong>Introduction.</strong> RAKSHA, a shop node for kiln, welding, tailoring, and construction work.</li>
+  <li><strong>Problem.</strong> Heat, fumes, and falls, with no instrument and no per-worker record.</li>
+  <li><strong>Approach.</strong> Walk the pipeline. Say the presence gate, the free-fall gate, and the relays that fail off.</li>
+  <li><strong>Simulation.</strong> The Logicraft serial capture from <span class="mono">RUN</span>.</li>
+  <li><strong>Results.</strong> The four bench measurements, then the one-minute hardware demo if the board is built.</li>
+  <li><strong>Edge cases.</strong> Shake, empty room, unknown card, Wi-Fi loss, DHT removed. Offer the shake and the DHT pull to the judges.</li>
+  <li><strong>SDG 8.</strong> The worker gets a warning they can feel in a loud shop. The employer gets minutes of exposure tied to a person, and the fan is the first corrective action.</li>
+</ol>
+<p class="small">Full stage contracts, the CSV columns, and the <span class="mono">config.h</span> names are in docs/pipeline.md. The three-hour clock is in docs/runbook.md. This PDF is the document to print and the procedure for the simulator.</p>
+
+</body>
+</html>
